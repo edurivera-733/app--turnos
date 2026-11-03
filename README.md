@@ -14,7 +14,16 @@ Calendario de turnos 7x7 editable para iPhone. Ya viene cargado con la secuencia
 | Miércoles → martes | Turno de día ☀️ (el último martes bajo en la noche ⬇️) |
 | Miércoles → lunes | Descanso 🏠 |
 
-La referencia es el martes 6 de enero de 2026 (inicio de noche). Si la empresa corre la secuencia, se cambia en *Ajustes* y todo el calendario se ajusta.
+La referencia es el martes 6 de enero de 2026 (inicio de noche).
+
+### Cambiar el día de ingreso (martes, miércoles u otro)
+
+En **Ajustes → Cambiar día de ingreso** eliges *Martes*, *Miércoles* u *Otro día* y la fecha en que subes al turno de noche. Con esa sola fecha la app calcula todas las subidas, bajadas, días y noches (por ejemplo, con ingreso miércoles: noches de miércoles a martes, bajada el miércoles en la mañana, subida el miércoles y turno de día de jueves a miércoles).
+
+- **Desde esa fecha:** lo anterior queda como estaba (útil cuando la empresa cambia la secuencia a partir de cierta semana).
+- **Todo el calendario:** recalcula también los meses pasados (útil para otra persona o para corregir la fecha).
+
+Los cambios quedan en un historial y se pueden quitar.
 
 ## Qué incluye
 
@@ -25,7 +34,7 @@ La referencia es el martes 6 de enero de 2026 (inicio de noche). Si la empresa c
   - escribir una **nota**.
 - **Año:** los 12 meses como en el calendario impreso.
 - **Resumen:** días, noches, descansos y subidas del año, días de vacaciones o permiso (y cuántos eran días de turno), tabla por mes.
-- **Ajustes:** fecha de la secuencia, horarios, categorías editables (emoji, nombre y color), tema claro u oscuro, **exportar al Calendario del iPhone** (.ics con aviso el día antes de subir), respaldo en iCloud y opción para importarlo.
+- **Ajustes:** día y fecha de ingreso al turno de noche (martes, miércoles u otro), horarios, categorías editables (emoji, nombre y color), tema claro u oscuro, **exportar al Calendario del iPhone** (.ics con aviso el día antes de subir), respaldo en iCloud y opción para importarlo.
 
 ## Instalar en el iPhone
 

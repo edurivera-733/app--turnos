@@ -16,7 +16,7 @@ Calendario de turnos editable para iPhone: **7x7** (día y noche) o **4x3** (4 d
 
 La referencia es el martes 6 de enero de 2026 (inicio de noche).
 
-## Turno 4x3 (ciclo de 7 días)
+## Turno 4x3 (solo de día, ciclo de 7 días)
 
 | Día | Qué pasa |
 |---|---|

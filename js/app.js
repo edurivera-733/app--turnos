@@ -640,12 +640,12 @@ function viewResumen() {
 // Texto corto de una secuencia, p. ej. "turno 7x7, subes a la noche los martes"
 function seqText(q) {
   const w = dow(q.date);
-  if (q.pattern === '4x3') return `turno 4x3, de ${WD[w]} a ${WD[(w + 3) % 7]}`;
+  if (q.pattern === '4x3') return `turno 4x3 de día, de ${WD[w]} a ${WD[(w + 3) % 7]}`;
   return `turno 7x7, subes a la noche los ${WD[w]}`;
 }
 function seqTitle(q) {
   const w = dow(q.date);
-  if (q.pattern === '4x3') return `Turno 4x3: de ${WD[w]} a ${WD[(w + 3) % 7]}`;
+  if (q.pattern === '4x3') return `Turno 4x3 de día: de ${WD[w]} a ${WD[(w + 3) % 7]}`;
   return `Turno 7x7: subes a la noche los ${WD[w]}`;
 }
 
@@ -669,7 +669,7 @@ function stepsHTML(q) {
     const D = (k) => WD[(w + k) % 7];
     return `<ol class="steps">
       <li><b>${cap(D(0))}</b>: <b>subo</b> a faena y trabajo el 1er día.</li>
-      <li>${cap(D(1))} y ${D(2)}: turno de <b>día</b>.</li>
+      <li>${cap(D(1))} y ${D(2)}: turno de <b>día</b> (el 4x3 es solo de día, ${db.settings.dayStart}–${db.settings.dayEnd}).</li>
       <li><b>${cap(D(3))}</b>: último día; al terminar <b>bajo</b>.</li>
       <li>Descanso de ${D(4)} a ${D(6)} y vuelve a empezar.</li>
     </ol>`;
@@ -947,14 +947,14 @@ function renderAnchorSheet() {
     <div class="field"><span class="lbl">Tipo de turno</span>
       <div class="seg">
         <button data-action="anchor-pattern" data-v="7x7" class="${pattern === '7x7' ? 'on' : ''}">7x7 · día y noche</button>
-        <button data-action="anchor-pattern" data-v="4x3" class="${pattern === '4x3' ? 'on' : ''}">4x3 · 4 días</button>
+        <button data-action="anchor-pattern" data-v="4x3" class="${pattern === '4x3' ? 'on' : ''}">4x3 · solo día</button>
       </div></div>
     <div class="field"><span class="lbl">${pattern === '4x3' ? '¿Qué día comienzas (subes)?' : '¿Qué día subes al turno de noche?'}</span>
       <div class="seg">
         ${quick.map(([v, l]) => `<button data-action="anchor-wd" data-v="${v}" class="${w === v ? 'on' : ''}">${l}</button>`).join('')}
         <button data-action="anchor-other" class="${other ? 'on' : ''}">${other ? `Otro: ${WD[w]}` : 'Otro día'}</button>
       </div>
-      ${pattern === '4x3' ? `<span class="small muted">Trabajas de ${WD[w]} a ${WD[(w + 3) % 7]} y descansas de ${WD[(w + 4) % 7]} a ${WD[(w + 6) % 7]}.</span>` : ''}</div>
+      ${pattern === '4x3' ? `<span class="small muted">Turno solo de día ☀️: trabajas de ${WD[w]} a ${WD[(w + 3) % 7]} y descansas de ${WD[(w + 4) % 7]} a ${WD[(w + 6) % 7]}.</span>` : ''}</div>
     <div class="field"><label for="anchorDate">${pattern === '4x3' ? 'Fecha de tu primer día de trabajo' : 'Fecha en que subes al turno de noche'}</label>
       <input class="input" type="date" id="anchorDate" value="${date}"></div>
     <div class="field"><span class="lbl">¿Desde cuándo aplica?</span>

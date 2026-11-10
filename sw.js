@@ -1,5 +1,5 @@
 /* Service worker: permite usar Turnos sin conexión */
-const CACHE = 'turnos7x7-v4';
+const CACHE = 'turnos7x7-v5';
 const ASSETS = [
   './',
   './index.html',

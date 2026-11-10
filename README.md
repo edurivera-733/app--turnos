@@ -1,8 +1,8 @@
-# 🌙☀️ Turnos (7x7 y 4x3)
+# 🌙☀️ Calendario de turnos
 
-Calendario de turnos editable para iPhone: **7x7** (día y noche) o **4x3** (4 días de trabajo y 3 de descanso). Ya viene cargado con la secuencia del **Calendario de Turnos 2026** y la sigue automáticamente en los años siguientes.
+Calendario de turnos editable para iPhone: **7x7 día y noche** (intercalado), **7x7 solo de día** o **4x3 solo de día**. Ya viene cargado con la secuencia del **Calendario de Turnos 2026** y la sigue automáticamente en los años siguientes.
 
-## Turno 7x7 (ciclo de 28 días)
+## Turno 7x7 día y noche (intercalado, ciclo de 28 días)
 
 | Día | Qué pasa |
 |---|---|
@@ -15,6 +15,16 @@ Calendario de turnos editable para iPhone: **7x7** (día y noche) o **4x3** (4 d
 | Miércoles → lunes | Descanso 🏠 |
 
 La referencia es el martes 6 de enero de 2026 (inicio de noche).
+
+## Turno 7x7 solo de día (ciclo de 14 días)
+
+| Día | Qué pasa |
+|---|---|
+| **Lunes** (en la noche) | Subo a faena ⬆️ |
+| Martes → lunes | Turno de día ☀️ (7 días; el último lunes bajo en la noche ⬇️) |
+| Martes → domingo | Descanso 🏠 |
+
+También con subida el **martes** (trabajo de miércoles a martes, descanso de miércoles a lunes) u otro día.
 
 ## Turno 4x3 (solo de día, ciclo de 7 días)
 
@@ -33,7 +43,7 @@ Los feriados aparecen **en rojo** (número en rojo, borde y barra roja) en el ca
 
 ### Cambiar el tipo de turno o el día de ingreso
 
-En **Ajustes → Cambiar turno o día de ingreso** eliges **7x7** o **4x3**; para 7x7, *Martes*, *Miércoles* u *Otro día* (para 4x3, *Lunes* u otro) y la fecha en que subes al turno de noche. Con esa sola fecha la app calcula todas las subidas, bajadas, días y noches (por ejemplo, con ingreso miércoles: noches de miércoles a martes, bajada el miércoles en la mañana, subida el miércoles y turno de día de jueves a miércoles).
+En **Ajustes → Cambiar turno o día de ingreso** eliges **7x7 día y noche**, **7x7 solo día** o **4x3 solo día**, y el día en que subes (martes o miércoles para día y noche; lunes o martes para solo día; lunes para 4x3; u otro día) y la fecha en que subes al turno de noche. Con esa sola fecha la app calcula todas las subidas, bajadas, días y noches (por ejemplo, con ingreso miércoles: noches de miércoles a martes, bajada el miércoles en la mañana, subida el miércoles y turno de día de jueves a miércoles).
 
 - **Desde esa fecha:** lo anterior queda como estaba (útil cuando la empresa cambia la secuencia a partir de cierta semana).
 - **Todo el calendario:** recalcula también los meses pasados (útil para otra persona o para corregir la fecha).

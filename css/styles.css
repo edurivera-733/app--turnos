@@ -521,3 +521,6 @@ table.data tr.cur td { font-weight: 700; }
 .mini .g .hol { color: var(--red-ink); font-weight: 800; box-shadow: inset 0 0 0 1.5px var(--red-ink); }
 .mini .g .hol.ev { box-shadow: inset 0 0 0 1.5px var(--red-ink), inset 0 -3px 0 var(--evc); }
 .cycle span { line-height: 1.15; text-align: center; height: auto; min-height: 26px; padding: 3px 0; }
+
+.seg.tall button { min-height: 46px; line-height: 1.15; padding: 4px 4px; }
+.seg.tall small { font-size: 12px; font-weight: 500; opacity: .85; }

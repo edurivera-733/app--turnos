@@ -26,8 +26,13 @@ const CYCLE = [
 // Turno 4x3: 4 días de trabajo (p. ej. lunes a jueves) y 3 de descanso
 const CYCLE_43 = ['DU', 'D', 'D', 'DE', 'L', 'L', 'L'];
 
+// Turno 7x7 solo de día: subo (p. ej. lunes en la noche), 7 días de trabajo (martes a lunes,
+// bajo ese lunes en la noche) y 6 de descanso
+const CYCLE_7D = ['DS', 'D', 'D', 'D', 'D', 'D', 'D', 'DB', 'L', 'L', 'L', 'L', 'L', 'L'];
+
 const PATTERNS = {
   '7x7': { cycle: CYCLE, len: 28, label: 'Turno 7x7' },
+  '7x7d': { cycle: CYCLE_7D, len: 14, label: 'Turno 7x7 solo día' },
   '4x3': { cycle: CYCLE_43, len: 7, label: 'Turno 4x3' },
 };
 
@@ -278,6 +283,8 @@ function shiftInfo(iso) {
   let pos = '';
   if (!ov && pat === '4x3') {
     pos = off <= 3 ? `Día ${off + 1} de 4` : `Descanso ${off - 3} de 3`;
+  } else if (!ov && pat === '7x7d') {
+    pos = off === 0 ? '' : off <= 7 ? `Día ${off} de 7` : `Descanso ${off - 7} de 6`;
   } else if (!ov) {
     if (off <= 6) pos = `Noche ${off + 1} de 7`;
     else if (off >= 15 && off <= 21) pos = `Día ${off - 14} de 7`;
@@ -641,12 +648,14 @@ function viewResumen() {
 function seqText(q) {
   const w = dow(q.date);
   if (q.pattern === '4x3') return `turno 4x3 de día, de ${WD[w]} a ${WD[(w + 3) % 7]}`;
-  return `turno 7x7, subes a la noche los ${WD[w]}`;
+  if (q.pattern === '7x7d') return `turno 7x7 solo de día, subes los ${WD[w]}`;
+  return `turno 7x7 día y noche, subes a la noche los ${WD[w]}`;
 }
 function seqTitle(q) {
   const w = dow(q.date);
   if (q.pattern === '4x3') return `Turno 4x3 de día: de ${WD[w]} a ${WD[(w + 3) % 7]}`;
-  return `Turno 7x7: subes a la noche los ${WD[w]}`;
+  if (q.pattern === '7x7d') return `Turno 7x7 solo de día: subes los ${WD[w]}`;
+  return `Turno 7x7 día y noche: subes a la noche los ${WD[w]}`;
 }
 
 function cycleHTML(q) {
@@ -664,6 +673,14 @@ function cycleHTML(q) {
 function stepsHTML(q) {
   const { W, W1, Wp } = weekdaysOf(q.date);
   const cap = (x) => x.charAt(0).toUpperCase() + x.slice(1);
+  if (q.pattern === '7x7d') {
+    return `<ol class="steps">
+      <li><b>${cap(W)}</b>: <b>subo</b> a faena (en la noche); al día siguiente comienza el turno.</li>
+      <li>Turno de <b>día</b> de ${W1} a ${W} (7 días); ese ${W} <b>bajo</b> en la noche.</li>
+      <li>Descanso de ${W1} a ${Wp}.</li>
+      <li>El ${W} siguiente vuelvo a subir. Siempre de día ☀️, sin noches.</li>
+    </ol>`;
+  }
   if (q.pattern === '4x3') {
     const w = dow(q.date);
     const D = (k) => WD[(w + k) % 7];
@@ -705,7 +722,7 @@ function viewAjustes() {
       ${stepsHTML(cur)}
       ${upcoming.length ? `<p class="ev-banner" style="background:var(--accent-wash)">🔁 Desde el ${fmtLong(upcoming[0].date)}: ${esc(seqText(upcoming[0]))}.</p>` : ''}
       <button class="btn block primary" data-action="anchor-sheet" style="margin-top:14px">Cambiar turno o día de ingreso</button>
-      <p class="note">Elige turno 7x7 o 4x3, el día y la fecha en que comienzas: la app calcula sola todas las subidas, bajadas y días de descanso.</p>
+      <p class="note">Elige 7x7 día y noche, 7x7 solo de día o 4x3, el día y la fecha en que comienzas: la app calcula sola todas las subidas, bajadas y días de descanso.</p>
     </section>
     <section class="card">
       <div class="card-head"><h2>Historial de la secuencia</h2></div>
@@ -903,8 +920,8 @@ function openAnchorSheet() {
   const t = todayISO();
   const cur = seqFor(t);
   let date;
-  if (cur.pattern === '4x3') date = nextWeekday(t, dow(cur.date));
-  else date = (findNext(t, (c, iso) => baseCode(iso) === 'NS') || { iso: cur.date }).iso;
+  // Próximo inicio de ciclo de la secuencia vigente (ingreso a la noche, subida o 1er día)
+  date = (findNext(t, (c, iso) => baseOffset(iso) === 0 && seqFor(iso).pattern === cur.pattern) || { iso: cur.date }).iso;
   sheetCtx = { anchor: { date, scope: 'from', pattern: cur.pattern } };
   renderAnchorSheet();
 }
@@ -914,6 +931,15 @@ function previewRows(q) {
   const D = (k) => diso(n + k);
   const r = (ic, lbl, val) => `<li class="item" style="padding:7px 0"><span class="emoji" style="width:34px;height:34px;font-size:17px">${ic}</span>
     <span class="main"><div class="t1" style="font-size:15px">${lbl}</div></span><span class="sub" style="text-align:right">${val}</span></li>`;
+  if (q.pattern === '7x7d') {
+    return `<ul class="list">
+      ${r('⬆️', 'Subida a faena', fmtShort(D(0)))}
+      ${r('☀️', 'Turno de día (7 días)', `${fmtShort(D(1))} → ${fmtShort(D(7))}`)}
+      ${r('⬇️', 'Bajada (en la noche)', fmtShort(D(7)))}
+      ${r('🏠', 'Descanso', `${fmtShort(D(8))} → ${fmtShort(D(13))}`)}
+      ${r('🔁', 'Siguiente subida', fmtShort(D(14)))}
+    </ul>`;
+  }
   if (q.pattern === '4x3') {
     return `<ul class="list">
       ${r('⬆️', 'Subida y 1er día', fmtShort(D(0)))}
@@ -940,22 +966,24 @@ function renderAnchorSheet() {
   const q = sheetCtx.anchor;
   const { date, scope, pattern } = q;
   const w = dow(date);
-  const quick = pattern === '4x3' ? [[1, 'Lunes']] : [[2, 'Martes'], [3, 'Miércoles']];
+  const quick = pattern === '4x3' ? [[1, 'Lunes']] : pattern === '7x7d' ? [[1, 'Lunes'], [2, 'Martes']] : [[2, 'Martes'], [3, 'Miércoles']];
   const other = !quick.some(([v]) => v === w);
   openSheet(`<div class="sheet-head"><button class="link" data-action="close-sheet">Cancelar</button>
       <h2>Mi turno</h2><button class="link strong" data-action="save-anchor">Guardar</button></div>
     <div class="field"><span class="lbl">Tipo de turno</span>
-      <div class="seg">
-        <button data-action="anchor-pattern" data-v="7x7" class="${pattern === '7x7' ? 'on' : ''}">7x7 · día y noche</button>
-        <button data-action="anchor-pattern" data-v="4x3" class="${pattern === '4x3' ? 'on' : ''}">4x3 · solo día</button>
+      <div class="seg tall">
+        <button data-action="anchor-pattern" data-v="7x7" class="${pattern === '7x7' ? 'on' : ''}">7x7<br><small>día y noche</small></button>
+        <button data-action="anchor-pattern" data-v="7x7d" class="${pattern === '7x7d' ? 'on' : ''}">7x7<br><small>solo día</small></button>
+        <button data-action="anchor-pattern" data-v="4x3" class="${pattern === '4x3' ? 'on' : ''}">4x3<br><small>solo día</small></button>
       </div></div>
-    <div class="field"><span class="lbl">${pattern === '4x3' ? '¿Qué día comienzas (subes)?' : '¿Qué día subes al turno de noche?'}</span>
+    <div class="field"><span class="lbl">${pattern === '4x3' ? '¿Qué día comienzas (subes)?' : pattern === '7x7d' ? '¿Qué día subes a faena?' : '¿Qué día subes al turno de noche?'}</span>
       <div class="seg">
         ${quick.map(([v, l]) => `<button data-action="anchor-wd" data-v="${v}" class="${w === v ? 'on' : ''}">${l}</button>`).join('')}
         <button data-action="anchor-other" class="${other ? 'on' : ''}">${other ? `Otro: ${WD[w]}` : 'Otro día'}</button>
       </div>
-      ${pattern === '4x3' ? `<span class="small muted">Turno solo de día ☀️: trabajas de ${WD[w]} a ${WD[(w + 3) % 7]} y descansas de ${WD[(w + 4) % 7]} a ${WD[(w + 6) % 7]}.</span>` : ''}</div>
-    <div class="field"><label for="anchorDate">${pattern === '4x3' ? 'Fecha de tu primer día de trabajo' : 'Fecha en que subes al turno de noche'}</label>
+      ${pattern === '4x3' ? `<span class="small muted">Turno solo de día ☀️: trabajas de ${WD[w]} a ${WD[(w + 3) % 7]} y descansas de ${WD[(w + 4) % 7]} a ${WD[(w + 6) % 7]}.</span>` : ''}
+      ${pattern === '7x7d' ? `<span class="small muted">Turno solo de día ☀️: subes el ${WD[w]} en la noche, trabajas de ${WD[(w + 1) % 7]} a ${WD[w]} y descansas de ${WD[(w + 1) % 7]} a ${WD[(w + 6) % 7]}.</span>` : ''}</div>
+    <div class="field"><label for="anchorDate">${pattern === '4x3' ? 'Fecha de tu primer día de trabajo' : pattern === '7x7d' ? 'Fecha en que subes a faena' : 'Fecha en que subes al turno de noche'}</label>
       <input class="input" type="date" id="anchorDate" value="${date}"></div>
     <div class="field"><span class="lbl">¿Desde cuándo aplica?</span>
       <div class="seg">
@@ -1208,7 +1236,7 @@ const actions = {
     a.pattern = el.dataset.v;
     const t = todayISO();
     // Propone la próxima fecha que calza con el día típico de cada turno
-    a.date = a.pattern === '4x3' ? nextWeekday(t, 1) : nextWeekday(t, 2);
+    a.date = a.pattern === '7x7' ? nextWeekday(t, 2) : nextWeekday(t, 1);
     renderAnchorSheet();
   },
   'anchor-wd': (el) => {

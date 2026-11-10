@@ -1,7 +1,7 @@
 {
-  "name": "Turnos 7x7",
+  "name": "Turnos",
   "short_name": "Turnos",
-  "description": "Calendario de turnos 7x7 editable: día, noche, descanso, vacaciones, permisos y cursos.",
+  "description": "Calendario de turnos 7x7 y 4x3 editable: día, noche, descanso, vacaciones, permisos y cursos.",
   "lang": "es",
   "start_url": "./",
   "scope": "./",

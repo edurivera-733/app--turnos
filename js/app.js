@@ -1,5 +1,5 @@
 /* =========================================================
-   Turnos 7x7 — calendario de turnos editable
+   Turnos (7x7 y 4x3) — calendario de turnos editable
    Ciclo de 28 días:
      Mar  → Subo a faena y trabajo la 1ª noche
      Mié…Lun → Noches 2 a 7
@@ -23,6 +23,14 @@ const CYCLE = [
   'L', 'L', 'L', 'L', 'L', 'L',       // 22-27 descanso
 ];
 
+// Turno 4x3: 4 días de trabajo (p. ej. lunes a jueves) y 3 de descanso
+const CYCLE_43 = ['DU', 'D', 'D', 'DE', 'L', 'L', 'L'];
+
+const PATTERNS = {
+  '7x7': { cycle: CYCLE, len: 28, label: 'Turno 7x7' },
+  '4x3': { cycle: CYCLE_43, len: 7, label: 'Turno 4x3' },
+};
+
 const SHIFTS = {
   NS: { name: 'Turno de noche', short: 'Noche', icon: '🌙', cls: 'n', kind: 'n', mark: 'up',
         desc: 'Subes a faena y trabajas la 1ª noche' },
@@ -35,7 +43,13 @@ const SHIFTS = {
   D:  { name: 'Turno de día', short: 'Día', icon: '☀️', cls: 'd', kind: 'd' },
   DB: { name: 'Turno de día', short: 'Día', icon: '☀️', cls: 'd', kind: 'd', mark: 'down',
         desc: 'Último día: terminas el turno y bajas de faena en la noche' },
+  DU: { name: 'Turno de día', short: 'Día', icon: '☀️', cls: 'd', kind: 'd', mark: 'up',
+        desc: 'Primer día: subes a faena y trabajas' },
+  DE: { name: 'Turno de día', short: 'Día', icon: '☀️', cls: 'd', kind: 'd', mark: 'down',
+        desc: 'Último día: terminas el turno y bajas de faena' },
 };
+const isUp = (c) => c === 'NS' || c === 'DS' || c === 'DU';
+const isDown = (c) => c === 'NB' || c === 'DB' || c === 'DE';
 const OVERRIDE_OPTS = [
   ['', 'Auto'], ['D', '☀️ Día'], ['N', '🌙 Noche'], ['L', '🏠 Desc.'], ['DS', '⬆️ Subida'], ['NB', '⬇️ Bajada'],
 ];
@@ -62,7 +76,7 @@ function freshDB() {
     version: 1,
     settings: {
       name: '',
-      anchors: [DEFAULT_ANCHOR], // fechas de ingreso al turno de noche; cada una rige desde ese día
+      anchors: [{ date: DEFAULT_ANCHOR, pattern: '7x7' }], // secuencias; cada una rige desde su fecha
       holidays: true,
       theme: 'auto',
       dayStart: '08:00', dayEnd: '20:00',
@@ -76,6 +90,13 @@ function freshDB() {
   };
 }
 
+// Ordena por fecha y deja una sola secuencia por fecha (la última)
+function sortAnchors(list) {
+  const m = new Map();
+  list.forEach((x) => m.set(x.date, { date: x.date, pattern: x.pattern }));
+  return [...m.values()].sort((a, b) => a.date.localeCompare(b.date));
+}
+
 function normalize(d) {
   const base = freshDB();
   const out = { ...base, ...d, settings: { ...base.settings, ...(d && d.settings) } };
@@ -84,11 +105,13 @@ function normalize(d) {
   out.events = out.events.filter((e) => e && isISO(e.from) && isISO(e.to)).map((e) => (e.to < e.from ? { ...e, from: e.to, to: e.from } : e));
   if (!out.overrides || typeof out.overrides !== 'object') out.overrides = {};
   if (!out.notes || typeof out.notes !== 'object') out.notes = {};
-  // Compatibilidad con respaldos antiguos (una sola fecha "anchor")
-  let anchors = Array.isArray(out.settings.anchors) ? out.settings.anchors.filter(isISO) : [];
-  if (!anchors.length && isISO(out.settings.anchor)) anchors = [out.settings.anchor];
-  if (!anchors.length) anchors = [DEFAULT_ANCHOR];
-  out.settings.anchors = [...new Set(anchors)].sort();
+  // Secuencias: [{ date, pattern }]. Compatibilidad con respaldos antiguos (fechas sueltas o "anchor")
+  let raw = Array.isArray(out.settings.anchors) ? out.settings.anchors : [];
+  if (!raw.length && isISO(out.settings.anchor)) raw = [out.settings.anchor];
+  let anchors = raw.map((x) => (typeof x === 'string' ? { date: x, pattern: '7x7' } : x))
+    .filter((x) => x && isISO(x.date) && PATTERNS[x.pattern]);
+  if (!anchors.length) anchors = [{ date: DEFAULT_ANCHOR, pattern: '7x7' }];
+  out.settings.anchors = sortAnchors(anchors);
   delete out.settings.anchor;
   return out;
 }
@@ -117,7 +140,7 @@ const pad = (n) => String(n).padStart(2, '0');
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
 const mod = (a, n) => ((a % n) + n) % n;
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-const isISO = (s) => typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s);
+function isISO(s) { return typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s); }
 
 const DAY = 86400000;
 function dnum(iso) { const [y, m, d] = iso.split('-').map(Number); return Math.round(Date.UTC(y, m - 1, d) / DAY); }
@@ -206,49 +229,56 @@ const isRed = (iso) => { const w = dow(iso); return w === 0 || w === 6 || !!holi
 /* =========================================================
    Lógica de turnos
    ========================================================= */
-// Fecha de ingreso al turno de noche que rige para un día (la última que no sea posterior;
-// antes de la primera se extiende la primera hacia atrás)
-// Cada cambio rige desde su fecha; si el ingreso anterior caía 1 a 3 días antes
+// Secuencia que rige para un día: la última cuya fecha no sea posterior (antes de la primera,
+// la primera se extiende hacia atrás). `date` es el 1er día del ciclo: ingreso a la noche (7x7)
+// o 1er día de trabajo (4x3). Si en un 7x7 el ingreso anterior caía 1 a 3 días antes
 // (p. ej. martes → miércoles), el cambio parte desde ese ingreso para no duplicar la subida.
 let effCache = { key: '', list: [] };
 function effAnchors() {
-  const a = db.settings.anchors, key = a.join(',');
+  const a = db.settings.anchors, key = JSON.stringify(a);
   if (effCache.key === key) return effCache.list;
-  const list = [{ from: a[0], anchor: a[0] }];
+  const list = [{ from: a[0].date, ...a[0] }];
   for (let i = 1; i < a.length; i++) {
     const prev = list[i - 1];
-    let from = a[i];
-    for (let k = 1; k <= 3; k++) {
-      const d = dnum(a[i]) - k;
-      if (mod(d - dnum(prev.anchor), 28) === 0 && diso(d) > prev.from) { from = diso(d); break; }
+    let from = a[i].date;
+    if (prev.pattern === a[i].pattern) {
+      const len = PATTERNS[prev.pattern].len;
+      for (let k = 1; k <= 3; k++) {
+        const d = dnum(a[i].date) - k;
+        if (mod(d - dnum(prev.date), len) === 0 && diso(d) > prev.from) { from = diso(d); break; }
+      }
     }
-    list.push({ from, anchor: a[i] });
+    list.push({ from, ...a[i] });
   }
   effCache = { key, list };
   return list;
 }
-function anchorFor(iso) {
+function seqFor(iso) {
   const list = effAnchors();
-  let a = list[0].anchor;
-  for (const x of list) { if (x.from <= iso) a = x.anchor; else break; }
+  let a = list[0];
+  for (const x of list) { if (x.from <= iso) a = x; else break; }
   return a;
 }
-function baseOffset(iso) { return mod(dnum(iso) - dnum(anchorFor(iso)), 28); }
-const baseCode = (iso) => CYCLE[baseOffset(iso)];
+function baseOffset(iso) { const q = seqFor(iso); return mod(dnum(iso) - dnum(q.date), PATTERNS[q.pattern].len); }
+function baseCode(iso) { return PATTERNS[seqFor(iso).pattern].cycle[baseOffset(iso)]; }
 // Días de la semana derivados de la fecha de ingreso: W = ingreso, W1 = día siguiente, Wp = día anterior
 function weekdaysOf(anchor) {
   const w = dow(anchor);
   return { w, W: WD[w], W1: WD[(w + 1) % 7], Wp: WD[(w + 6) % 7] };
 }
-function shiftCode(iso) { return db.overrides[iso] || CYCLE[baseOffset(iso)]; }
+function shiftCode(iso) { return db.overrides[iso] || baseCode(iso); }
 
 function shiftInfo(iso) {
   const ov = db.overrides[iso];
   const off = baseOffset(iso);
-  const code = ov || CYCLE[off];
+  const pat = seqFor(iso).pattern;
+  const base = baseCode(iso);
+  const code = ov || base;
   const s = SHIFTS[code];
   let pos = '';
-  if (!ov) {
+  if (!ov && pat === '4x3') {
+    pos = off <= 3 ? `Día ${off + 1} de 4` : `Descanso ${off - 3} de 3`;
+  } else if (!ov) {
     if (off <= 6) pos = `Noche ${off + 1} de 7`;
     else if (off >= 15 && off <= 21) pos = `Día ${off - 14} de 7`;
     else if (off >= 8 && off <= 13) pos = `Descanso ${off - 7} de 6`;
@@ -256,11 +286,11 @@ function shiftInfo(iso) {
   }
   const hours = s.kind === 'd' ? `${db.settings.dayStart} – ${db.settings.dayEnd}`
     : s.kind === 'n' ? `${db.settings.nightStart} – ${db.settings.nightEnd}` : '';
-  return { code, off, s, pos, override: !!ov, base: CYCLE[off], hours };
+  return { code, off, s, pos, override: !!ov, base, hours, pattern: pat };
 }
 
 // Bloque de trabajo (subida → bajada) que contiene el día, según la secuencia base
-const GROUP = { NS: 'n', N: 'n', NB: 'n', DS: 'd', D: 'd', DB: 'd', L: 'l' };
+const GROUP = { NS: 'n', N: 'n', NB: 'n', DS: 'd', D: 'd', DB: 'd', DU: 'd', DE: 'd', L: 'l' };
 function blockAround(iso, group) {
   if (GROUP[baseCode(iso)] !== group) return null;
   let a = dnum(iso), b = a;
@@ -376,8 +406,8 @@ function viewHoy() {
   </section>`;
 
   // Próxima subida / bajada
-  const nUp = findNext(addDays(t, 1), (c) => c === 'NS' || c === 'DS');
-  const nDown = findNext(t, (c) => c === 'NB' || c === 'DB');
+  const nUp = findNext(addDays(t, 1), isUp);
+  const nDown = findNext(t, isDown);
   const upTxt = nUp ? (shiftCode(nUp.iso) === 'NS' ? 'turno de noche' : 'turno de día') : '';
   const next = `<div class="next-grid">
     <button class="card" data-action="day" data-date="${nUp ? nUp.iso : t}" style="text-align:left">
@@ -388,7 +418,7 @@ function viewHoy() {
     <button class="card" data-action="day" data-date="${nDown ? nDown.iso : t}" style="text-align:left">
       <div class="k">⬇️ Próxima bajada</div>
       <div class="v">${nDown ? (nDown.k === 0 ? 'Hoy' : nDown.k === 1 ? 'Mañana' : `En ${nDown.k} días`) : '—'}</div>
-      <div class="w">${nDown ? `${fmtShort(nDown.iso)} · ${shiftCode(nDown.iso) === 'NB' ? 'en la mañana' : 'en la noche'}` : ''}</div>
+      <div class="w">${nDown ? `${fmtShort(nDown.iso)} · ${shiftCode(nDown.iso) === 'NB' ? 'en la mañana' : shiftCode(nDown.iso) === 'DB' ? 'en la noche' : 'al terminar'}` : ''}</div>
     </button>
   </div>`;
 
@@ -398,7 +428,7 @@ function viewHoy() {
     const iso = addDays(t, k);
     const si = shiftInfo(iso);
     const dots = eventsOn(iso).slice(0, 3).map((e) => `<i style="background:${catById(e.cat).color}"></i>`).join('');
-    strip += `<button class="${si.s.cls === 'd' || si.s.cls === 'n' ? si.s.cls : ''} ${k === 0 ? 'is-today' : ''}" data-action="day" data-date="${iso}">
+    strip += `<button class="${si.s.cls === 'd' || si.s.cls === 'n' ? si.s.cls : ''} ${k === 0 ? 'is-today' : ''} ${holidayName(iso) ? 'hol' : ''}" data-action="day" data-date="${iso}">
       <span class="wd"${isRed(iso) ? ' style="color:var(--red-ink)"' : ''}>${WD_S[dow(iso)]}</span>
       <span class="dn">${Number(iso.slice(8))}</span>
       <span class="ic">${si.s.kind === 'l' ? '' : si.s.icon}</span>
@@ -416,10 +446,10 @@ function viewHoy() {
     ${up.length ? `<ul class="list">${up.map(eventItem).join('')}</ul>` : `<div class="empty"><div class="big">🗓️</div>Aún no tienes nada agendado.<br>Toca <b>+</b> para agregar vacaciones, permisos, cursos…</div>`}
   </section>`;
 
-  const chg = db.settings.anchors.find((x) => x > t);
-  const chgCard = chg ? `<section class="card"><button class="row" data-action="day" data-date="${chg}" style="width:100%;text-align:left">
-    <span style="font-size:22px">🔁</span><span class="main" style="flex:1"><div class="t1" style="font-weight:600">Cambio de día de ingreso</div>
-    <div class="t2 muted small">Desde el ${fmtLong(chg)} (${inDays(dnum(chg) - dnum(t))}) subes al turno de noche los ${WD[dow(chg)]}.</div></span></button></section>` : '';
+  const chg = db.settings.anchors.find((x) => x.date > t);
+  const chgCard = chg ? `<section class="card"><button class="row" data-action="day" data-date="${chg.date}" style="width:100%;text-align:left">
+    <span style="font-size:22px">🔁</span><span class="main" style="flex:1"><div class="t1" style="font-weight:600">Cambio de turno</div>
+    <div class="t2 muted small">Desde el ${fmtLong(chg.date)} (${inDays(dnum(chg.date) - dnum(t))}): ${seqText(chg)}.</div></span></button></section>` : '';
 
   return hero + chgCard + next + stripCard + evCard + backupReminder();
 }
@@ -454,11 +484,12 @@ function cellHTML(iso, opts = {}) {
   const si = shiftInfo(iso);
   const evs = eventsOn(iso);
   const t = todayISO();
-  const cls = ['cell', si.s.cls, iso === t ? 'is-today' : '', evs.length ? 'has-ev' : ''].join(' ');
+  const hol = holidayName(iso);
+  const cls = ['cell', si.s.cls, iso === t ? 'is-today' : '', evs.length ? 'has-ev' : '', hol ? 'hol' : ''].join(' ');
   const mark = si.s.mark === 'up' ? '<span class="mk up">↑</span>' : si.s.mark === 'down' ? '<span class="mk down">↓</span>' : '';
   let ic = '';
   if (si.code === 'NS' || si.code === 'N') ic = '🌙';
-  else if (si.code === 'D' || si.code === 'DB') ic = '☀️';
+  else if (si.s.kind === 'd') ic = '☀️';
   else if (si.code === 'DS') ic = '<span class="ic faded">☀️</span>';
   else if (si.code === 'NB') ic = '<span class="ic faded">🌙</span>';
   const icon = ic.startsWith('<') ? ic : `<span class="ic">${ic}</span>`;
@@ -466,8 +497,8 @@ function cellHTML(iso, opts = {}) {
   const bar = evs.length ? `<span class="bar">${evs.slice(0, 3).map((e) => `<i style="background:${catById(e.cat).color}"></i>`).join('')}</span>` : '';
   const note = db.notes[iso] ? '<span class="nt"></span>' : '';
   const ov = si.override ? '<span class="ov">✎</span>' : '';
-  return `<button class="${cls}" data-action="day" data-date="${iso}" aria-label="${fmtLong(iso)}: ${si.s.name}${evs.map((e) => ', ' + catById(e.cat).name).join('')}">
-    <span class="dn${isRed(iso) ? ' red' : ''}">${Number(iso.slice(8))}</span>${mark}${note}
+  return `<button class="${cls}" data-action="day" data-date="${iso}" aria-label="${fmtLong(iso)}${hol ? ' (feriado: ' + esc(hol) + ')' : ''}: ${si.s.name}${evs.map((e) => ', ' + catById(e.cat).name).join('')}">
+    ${hol ? '<span class="hb"></span>' : ''}<span class="dn${isRed(iso) ? ' red' : ''}">${Number(iso.slice(8))}</span>${mark}${note}
     ${icon}<span class="evs">${emo}</span>${ov}${bar}</button>`;
 }
 
@@ -498,6 +529,7 @@ function viewMes() {
         <span><b class="pos">↑</b> Subida</span>
         <span><b class="neg">↓</b> Bajada</span>
         <span><i style="background:var(--card-2)"></i>Descanso</span>
+        ${db.settings.holidays ? '<span><i style="background:var(--card-2);box-shadow:inset 0 3px 0 var(--red-ink)"></i><b class="neg" style="color:var(--red-ink)">Feriado</b></span>' : ''}
       </div>
     </section>
     <section class="card"><div class="card-head"><h2>Este mes</h2></div>
@@ -531,7 +563,7 @@ function viewAnio() {
       const iso = ymd(y, m, d);
       const si = shiftInfo(iso);
       const ev = eventsOn(iso)[0];
-      const cls = [si.s.cls === 'l' ? '' : si.s.cls, isRed(iso) ? 'red' : '', ev ? 'ev' : '', iso === t ? 'td' : ''].join(' ').trim();
+      const cls = [si.s.cls === 'l' ? '' : si.s.cls, isRed(iso) ? 'red' : '', holidayName(iso) ? 'hol' : '', ev ? 'ev' : '', iso === t ? 'td' : ''].join(' ').trim();
       g += `<span class="${cls}"${ev ? ` style="--evc:${catById(ev.cat).color}"` : ''}>${d}</span>`;
     }
     html += `<button class="mini" data-action="open-month" data-y="${y}" data-m="${m}"><h3>${MONTHS[m - 1]}</h3><div class="g">${g}</div></button>`;
@@ -545,6 +577,7 @@ function viewAnio() {
         <span><i style="background:var(--moon-wash)"></i>Turno de noche</span>
         <span><i style="background:linear-gradient(135deg, transparent 50%, var(--sun-wash) 50%)"></i>Subida</span>
         <span><i style="background:linear-gradient(135deg, var(--moon-wash) 50%, transparent 50%)"></i>Bajada</span>
+        ${db.settings.holidays ? '<span><i style="box-shadow:inset 0 0 0 2px var(--red-ink)"></i><b style="color:var(--red-ink)">Feriado</b></span>' : ''}
         ${cats.map((c) => `<span><i style="background:${c.color}"></i>${c.emoji} ${esc(c.name)}</span>`).join('')}
       </div>
       <p class="note">Toca un mes para abrirlo y editarlo.</p>
@@ -587,7 +620,7 @@ function viewResumen() {
         <div><div class="v">${c.l + c.b}</div><div class="k">Descanso</div></div>
         <div><div class="v">${c.s}</div><div class="k">Subidas</div></div>
       </div>
-      <p class="note">Total de días de trabajo: <b>${c.d + c.n}</b>. Los martes de subida al turno de día se cuentan como “Subidas”; los martes de bajada del turno de noche, como descanso.</p>
+      <p class="note">Total de días de trabajo: <b>${c.d + c.n}</b>. En el 7x7, los días en que solo subes a faena (antes del turno de día) se cuentan como “Subidas” y los de bajada del turno de noche, como descanso.</p>
     </section>
     <section class="card"><div class="card-head"><h2>Vacaciones, permisos y más</h2></div>
       ${perCat.length ? `<ul class="list">${perCat.map((r) => `<li class="item"><span class="emoji" style="box-shadow:inset 0 -3px 0 ${r.cat.color}">${r.cat.emoji}</span>
@@ -604,19 +637,43 @@ function viewResumen() {
 /* =========================================================
    Vista: Ajustes
    ========================================================= */
-function cycleHTML(anchor) {
-  const w = dow(anchor);
-  return `<div class="cycle">${CYCLE.map((c, i) => {
-    const sh = SHIFTS[c];
-    const lbl = c === 'NS' || c === 'N' ? '🌙' : c === 'D' || c === 'DB' ? '☀️' : c === 'DS' ? '↑' : c === 'NB' ? '↓' : '';
-    return `<span class="${sh.cls}" title="${WD_S[(w + i) % 7]}">${lbl}</span>`;
-  }).join('')}</div>
-  <div class="row small muted" style="justify-content:space-between"><span>${WD_S[w]}</span><span>28 días · se repite</span><span>${WD_S[(w + 6) % 7]}</span></div>`;
+// Texto corto de una secuencia, p. ej. "turno 7x7, subes a la noche los martes"
+function seqText(q) {
+  const w = dow(q.date);
+  if (q.pattern === '4x3') return `turno 4x3, de ${WD[w]} a ${WD[(w + 3) % 7]}`;
+  return `turno 7x7, subes a la noche los ${WD[w]}`;
+}
+function seqTitle(q) {
+  const w = dow(q.date);
+  if (q.pattern === '4x3') return `Turno 4x3: de ${WD[w]} a ${WD[(w + 3) % 7]}`;
+  return `Turno 7x7: subes a la noche los ${WD[w]}`;
 }
 
-function stepsHTML(anchor) {
-  const { W, W1, Wp } = weekdaysOf(anchor);
+function cycleHTML(q) {
+  const w = dow(q.date);
+  const P = PATTERNS[q.pattern];
+  const cols = q.pattern === '4x3' ? 7 : 14;
+  return `<div class="cycle" style="grid-template-columns:repeat(${cols}, minmax(0, 1fr))">${P.cycle.map((c, i) => {
+    const sh = SHIFTS[c];
+    const lbl = c === 'NS' || c === 'N' ? '🌙' : sh.kind === 'd' ? '☀️' : c === 'DS' ? '↑' : c === 'NB' ? '↓' : '';
+    return `<span class="${sh.cls}" title="${WD_S[(w + i) % 7]}">${q.pattern === '4x3' ? `${WD_S[(w + i) % 7]}<br>` : ''}${lbl}</span>`;
+  }).join('')}</div>
+  <div class="row small muted" style="justify-content:space-between"><span>${WD_S[w]}</span><span>${P.len} días · se repite</span><span>${WD_S[(w + P.len - 1) % 7]}</span></div>`;
+}
+
+function stepsHTML(q) {
+  const { W, W1, Wp } = weekdaysOf(q.date);
   const cap = (x) => x.charAt(0).toUpperCase() + x.slice(1);
+  if (q.pattern === '4x3') {
+    const w = dow(q.date);
+    const D = (k) => WD[(w + k) % 7];
+    return `<ol class="steps">
+      <li><b>${cap(D(0))}</b>: <b>subo</b> a faena y trabajo el 1er día.</li>
+      <li>${cap(D(1))} y ${D(2)}: turno de <b>día</b>.</li>
+      <li><b>${cap(D(3))}</b>: último día; al terminar <b>bajo</b>.</li>
+      <li>Descanso de ${D(4)} a ${D(6)} y vuelve a empezar.</li>
+    </ol>`;
+  }
   return `<ol class="steps">
     <li><b>${cap(W)}</b>: subo a faena y comienza el turno de <b>noche</b> (7 noches, de ${W} a ${Wp}).</li>
     <li><b>${cap(W)}</b> en la mañana: termina la noche y <b>bajo</b>. Descanso de ${W1} a ${Wp}.</li>
@@ -628,32 +685,32 @@ function stepsHTML(anchor) {
 function viewAjustes() {
   const s = db.settings;
   const t = todayISO();
-  const cur = anchorFor(t);
-  const { W } = weekdaysOf(cur);
-  const upcoming = s.anchors.filter((x) => x > t);
+  const cur = seqFor(t);
+  const upcoming = s.anchors.filter((x) => x.date > t);
   const hist = s.anchors.map((x, i) => {
-    const active = x === cur;
+    const active = x.date === cur.date && x.pattern === cur.pattern;
     return `<li class="item" style="padding:8px 0">
-      <span class="emoji">${active ? '✅' : x > t ? '⏳' : '🕘'}</span>
-      <span class="main"><div class="t1">Ingreso los <b>${WD[dow(x)]}</b></div>
-        <div class="t2">${i === 0 ? `Desde el inicio (1ª noche: ${fmtShort(x)} ${x.slice(0, 4)})` : `Desde ${fmtShort(x)} ${x.slice(0, 4)}`}${active ? ' · vigente' : x > t ? ' · próximo cambio' : ''}</div></span>
-      ${i > 0 ? `<button class="btn sm" data-action="del-anchor" data-v="${x}" aria-label="Quitar cambio">Quitar</button>` : ''}
+      <span class="emoji">${active ? '✅' : x.date > t ? '⏳' : '🕘'}</span>
+      <span class="main"><div class="t1">${esc(seqTitle(x))}</div>
+        <div class="t2">${i === 0 ? `Desde el inicio (1er día: ${fmtShort(x.date)} ${x.date.slice(0, 4)})` : `Desde ${fmtShort(x.date)} ${x.date.slice(0, 4)}`}${active ? ' · vigente' : x.date > t ? ' · próximo cambio' : ''}</div></span>
+      ${i > 0 ? `<button class="btn sm" data-action="del-anchor" data-v="${x.date}" aria-label="Quitar cambio">Quitar</button>` : ''}
     </li>`;
   }).join('');
-  return `<div class="section-title">Mi turno 7x7</div>
+  const isDefault = s.anchors.length === 1 && s.anchors[0].date === DEFAULT_ANCHOR && s.anchors[0].pattern === '7x7';
+  return `<div class="section-title">Mi turno</div>
     <section class="card">
-      <div class="card-head" style="margin-bottom:6px"><h2>Subes al turno de noche los ${W}</h2></div>
-      <p class="sub">El ciclo dura 28 días y se repite siempre igual:</p>
+      <div class="card-head" style="margin-bottom:6px"><h2>${esc(seqTitle(cur))}</h2></div>
+      <p class="sub">El ciclo dura ${PATTERNS[cur.pattern].len} días y se repite siempre igual:</p>
       ${cycleHTML(cur)}
       ${stepsHTML(cur)}
-      ${upcoming.length ? `<p class="ev-banner" style="background:var(--accent-wash)">🔁 Desde el ${fmtLong(upcoming[0])} subes los ${WD[dow(upcoming[0])]}.</p>` : ''}
-      <button class="btn block primary" data-action="anchor-sheet" style="margin-top:14px">Cambiar día de ingreso</button>
-      <p class="note">Elige martes, miércoles u otro día y la fecha de tu ingreso al turno de noche: la app calcula sola todas las subidas, bajadas, días y noches.</p>
+      ${upcoming.length ? `<p class="ev-banner" style="background:var(--accent-wash)">🔁 Desde el ${fmtLong(upcoming[0].date)}: ${esc(seqText(upcoming[0]))}.</p>` : ''}
+      <button class="btn block primary" data-action="anchor-sheet" style="margin-top:14px">Cambiar turno o día de ingreso</button>
+      <p class="note">Elige turno 7x7 o 4x3, el día y la fecha en que comienzas: la app calcula sola todas las subidas, bajadas y días de descanso.</p>
     </section>
     <section class="card">
       <div class="card-head"><h2>Historial de la secuencia</h2></div>
       <ul class="list">${hist}</ul>
-      ${s.anchors.length > 1 || s.anchors[0] !== DEFAULT_ANCHOR ? '<button class="btn block" data-action="reset-anchor" style="margin-top:8px">Volver a la secuencia 2026 original</button>' : ''}
+      ${isDefault ? '' : '<button class="btn block" data-action="reset-anchor" style="margin-top:8px">Volver a la secuencia 2026 original</button>'}
       <p class="note">Cada cambio rige desde su fecha; lo anterior queda como estaba. Tus vacaciones, permisos y notas se mantienen.</p>
     </section>
 
@@ -699,7 +756,7 @@ function viewAjustes() {
       <p class="note">${s.lastBackup ? `Último respaldo: ${fmtLong(new Date(s.lastBackup).toISOString().slice(0, 10))}.` : 'Aún no has hecho un respaldo.'}</p>
       <button class="btn block danger" data-action="wipe" style="margin-top:10px">Borrar vacaciones, permisos y cambios</button>
     </section>
-    <p class="note" style="text-align:center;margin:18px 0">Turnos 7x7 · funciona sin internet</p>`;
+    <p class="note" style="text-align:center;margin:18px 0">Turnos · 7x7 y 4x3 · funciona sin internet</p>`;
 }
 
 /* =========================================================
@@ -729,7 +786,7 @@ function openDay(iso) {
   if (wb && !si.override) {
     blockTxt = wb.kind === 'n'
       ? `Bloque de noche: sube ${fmtShort(wb.from)} · baja ${fmtShort(wb.to)} en la mañana`
-      : `Bloque de día: sube ${fmtShort(wb.from)} · baja ${fmtShort(wb.to)} en la noche`;
+      : `Bloque de día: sube ${fmtShort(wb.from)} · baja ${fmtShort(wb.to)} ${si.pattern === '4x3' ? 'al terminar' : 'en la noche'}`;
   } else if (!si.override) {
     const rb = restBlock(iso);
     if (rb) blockTxt = `Descanso del ${fmtShort(rb.from)} al ${fmtShort(rb.to)}`;
@@ -742,7 +799,7 @@ function openDay(iso) {
       <div><div class="t1">${si.s.name}</div><div class="t2">${esc(desc)}</div></div>
     </div>
     ${blockTxt ? `<p class="note">${blockTxt}</p>` : ''}
-    ${db.settings.anchors.indexOf(iso) > 0 ? `<p class="ev-banner" style="background:var(--accent-wash)">🔁 Desde este día subes al turno de noche los ${WD[dow(iso)]}.</p>` : ''}
+    ${db.settings.anchors.findIndex((x) => x.date === iso) > 0 ? `<p class="ev-banner" style="background:var(--accent-wash)">🔁 Desde este día: ${esc(seqText(db.settings.anchors.find((x) => x.date === iso)))}.</p>` : ''}
 
     ${evs.length ? `<div class="section-title">Este día</div><ul class="list">${evs.map(eventItem).join('')}</ul>` : ''}
 
@@ -752,7 +809,7 @@ function openDay(iso) {
 
     <div class="section-title">Cambiar el turno de este día</div>
     <div class="seg grid3">${OVERRIDE_OPTS.map(([v, l]) => `<button data-action="override" data-v="${v}" class="${(db.overrides[iso] || '') === v ? 'on' : ''}">${l}</button>`).join('')}</div>
-    <p class="note">Úsalo si cambias un turno puntual. “Auto” vuelve a la secuencia normal 7x7.</p>
+    <p class="note">Úsalo si cambias un turno puntual. “Auto” vuelve a la secuencia normal de tu turno.</p>
 
     <div class="section-title">Nota</div>
     <textarea class="input" id="dayNote" rows="3" style="min-height:80px" placeholder="Ej: llevar EPP, reunión, vuelo 7:30…">${esc(db.notes[iso] || '')}</textarea>
@@ -840,19 +897,32 @@ function renderCatSheet() {
     ${c.id ? `<button class="btn block danger" data-action="del-cat" style="margin-top:8px">Eliminar categoría${used ? ` (y sus ${used} registros)` : ''}</button>` : ''}`);
 }
 
-/* Cambiar día de ingreso al turno de noche */
+/* Cambiar tipo de turno y día de ingreso */
+function nextWeekday(fromIso, w) { return addDays(fromIso, mod(w - dow(fromIso), 7)); }
 function openAnchorSheet() {
   const t = todayISO();
-  const next = findNext(t, (c, iso) => baseCode(iso) === 'NS') || { iso: anchorFor(t) };
-  sheetCtx = { anchor: { date: next.iso, scope: 'from' } };
+  const cur = seqFor(t);
+  let date;
+  if (cur.pattern === '4x3') date = nextWeekday(t, dow(cur.date));
+  else date = (findNext(t, (c, iso) => baseCode(iso) === 'NS') || { iso: cur.date }).iso;
+  sheetCtx = { anchor: { date, scope: 'from', pattern: cur.pattern } };
   renderAnchorSheet();
 }
 
-function previewRows(a) {
-  const n = dnum(a);
+function previewRows(q) {
+  const n = dnum(q.date);
   const D = (k) => diso(n + k);
   const r = (ic, lbl, val) => `<li class="item" style="padding:7px 0"><span class="emoji" style="width:34px;height:34px;font-size:17px">${ic}</span>
     <span class="main"><div class="t1" style="font-size:15px">${lbl}</div></span><span class="sub" style="text-align:right">${val}</span></li>`;
+  if (q.pattern === '4x3') {
+    return `<ul class="list">
+      ${r('⬆️', 'Subida y 1er día', fmtShort(D(0)))}
+      ${r('☀️', 'Turno de día', `${fmtShort(D(0))} → ${fmtShort(D(3))}`)}
+      ${r('⬇️', 'Bajada (al terminar)', fmtShort(D(3)))}
+      ${r('🏠', 'Descanso', `${fmtShort(D(4))} → ${fmtShort(D(6))}`)}
+      ${r('🔁', 'Siguiente subida', fmtShort(D(7)))}
+    </ul>`;
+  }
   return `<ul class="list">
     ${r('🌙', 'Subida y 1ª noche', fmtShort(D(0)))}
     ${r('🌙', 'Última noche', fmtShort(D(6)))}
@@ -867,18 +937,25 @@ function previewRows(a) {
 }
 
 function renderAnchorSheet() {
-  const { date, scope } = sheetCtx.anchor;
+  const q = sheetCtx.anchor;
+  const { date, scope, pattern } = q;
   const w = dow(date);
-  const other = w !== 2 && w !== 3;
+  const quick = pattern === '4x3' ? [[1, 'Lunes']] : [[2, 'Martes'], [3, 'Miércoles']];
+  const other = !quick.some(([v]) => v === w);
   openSheet(`<div class="sheet-head"><button class="link" data-action="close-sheet">Cancelar</button>
-      <h2>Día de ingreso</h2><button class="link strong" data-action="save-anchor">Guardar</button></div>
-    <div class="field"><span class="lbl">¿Qué día subes al turno de noche?</span>
+      <h2>Mi turno</h2><button class="link strong" data-action="save-anchor">Guardar</button></div>
+    <div class="field"><span class="lbl">Tipo de turno</span>
       <div class="seg">
-        <button data-action="anchor-wd" data-v="2" class="${w === 2 ? 'on' : ''}">Martes</button>
-        <button data-action="anchor-wd" data-v="3" class="${w === 3 ? 'on' : ''}">Miércoles</button>
-        <button data-action="anchor-other" class="${other ? 'on' : ''}">${other ? `Otro: ${WD[w]}` : 'Otro día'}</button>
+        <button data-action="anchor-pattern" data-v="7x7" class="${pattern === '7x7' ? 'on' : ''}">7x7 · día y noche</button>
+        <button data-action="anchor-pattern" data-v="4x3" class="${pattern === '4x3' ? 'on' : ''}">4x3 · 4 días</button>
       </div></div>
-    <div class="field"><label for="anchorDate">Fecha en que subes al turno de noche</label>
+    <div class="field"><span class="lbl">${pattern === '4x3' ? '¿Qué día comienzas (subes)?' : '¿Qué día subes al turno de noche?'}</span>
+      <div class="seg">
+        ${quick.map(([v, l]) => `<button data-action="anchor-wd" data-v="${v}" class="${w === v ? 'on' : ''}">${l}</button>`).join('')}
+        <button data-action="anchor-other" class="${other ? 'on' : ''}">${other ? `Otro: ${WD[w]}` : 'Otro día'}</button>
+      </div>
+      ${pattern === '4x3' ? `<span class="small muted">Trabajas de ${WD[w]} a ${WD[(w + 3) % 7]} y descansas de ${WD[(w + 4) % 7]} a ${WD[(w + 6) % 7]}.</span>` : ''}</div>
+    <div class="field"><label for="anchorDate">${pattern === '4x3' ? 'Fecha de tu primer día de trabajo' : 'Fecha en que subes al turno de noche'}</label>
       <input class="input" type="date" id="anchorDate" value="${date}"></div>
     <div class="field"><span class="lbl">¿Desde cuándo aplica?</span>
       <div class="seg">
@@ -887,8 +964,8 @@ function renderAnchorSheet() {
       </div>
       <span class="small muted">${scope === 'from' ? 'Lo anterior a esa fecha queda como estaba (y reemplaza cambios posteriores, si había).' : 'Se recalcula todo, también los meses pasados.'}</span></div>
     <div class="section-title">Así queda tu ciclo</div>
-    ${previewRows(date)}
-    ${stepsHTML(date)}`);
+    ${previewRows(q)}
+    ${stepsHTML(q)}`);
 }
 
 /* Exportar a Calendario (.ics) */
@@ -949,9 +1026,11 @@ function buildICS(year, opt) {
               `DESCRIPTION:${icsText(`Subida a faena: ${fmtLong(a)}.\nÚltima noche: ${fmtLong(b)}.\nBajada: ${fmtLong(diso(e + 1))} en la mañana.`)}`],
               opt.alarm ? { text: 'Mañana subes a faena (turno de noche)', trigger: '-P1D' } : null);
           } else {
+            const firstUp = shiftCode(a) === 'DU';
             ev(`d-${a}`, [`DTSTART:${T(a, s.dayStart)}`, `DTEND:${T(b, s.dayEnd)}`,
               `SUMMARY:${icsText(`☀️ Turno de día (${nd} ${nd === 1 ? 'día' : 'días'})`)}`,
-              `DESCRIPTION:${icsText(`Del ${fmtLong(a)} al ${fmtLong(b)}.\nBajada de faena: ${fmtLong(b)} en la noche.`)}`]);
+              `DESCRIPTION:${icsText(`Del ${fmtLong(a)} al ${fmtLong(b)}.\n${firstUp ? `Subida: ${fmtLong(a)}.\n` : ''}Bajada de faena: ${fmtLong(b)}${firstUp ? ' al terminar' : ' en la noche'}.`)}`],
+              opt.alarm && firstUp ? { text: 'Mañana subes a faena (turno de día)', trigger: '-PT12H' } : null);
           }
         }
         k = e + 1;
@@ -1074,7 +1153,7 @@ const actions = {
     if (r === 'block') { const b = workBlock(e.from); if (b) { e.from = b.from; e.to = b.to; } }
     if (r === 'rest') { const b = restBlock(e.from); if (b) { e.from = b.from; e.to = b.to; } }
     if (r === 'next') {
-      const up = findNext(addDays(e.from, 1), (c) => c === 'NS' || c === 'DS');
+      const up = findNext(addDays(e.from, 1), isUp);
       if (up) { const b = workBlock(up.iso); if (b) { e.from = b.from; e.to = b.to; } }
     }
     renderEventSheet();
@@ -1113,16 +1192,25 @@ const actions = {
   override: (el) => {
     const iso = sheetCtx.day;
     const v = el.dataset.v;
-    if (!v || v === CYCLE[baseOffset(iso)]) delete db.overrides[iso]; else db.overrides[iso] = v;
+    if (!v || v === baseCode(iso)) delete db.overrides[iso]; else db.overrides[iso] = v;
     saveDayNote();
     save(); render(); openDay(iso);
   },
   theme: (el) => { db.settings.theme = el.dataset.v; save(); render(); },
   'reset-anchor': () => {
-    if (!confirm('¿Volver a la secuencia original 2026 (ingreso los martes desde el 6 de enero)? Se quitan los cambios de día de ingreso.')) return;
-    db.settings.anchors = [DEFAULT_ANCHOR]; save(); render(); toast('Secuencia 2026 restablecida');
+    if (!confirm('¿Volver a la secuencia original 2026 (turno 7x7, ingreso los martes desde el 6 de enero)? Se quitan los cambios de turno.')) return;
+    db.settings.anchors = [{ date: DEFAULT_ANCHOR, pattern: '7x7' }]; save(); render(); toast('Secuencia 2026 restablecida');
   },
   'anchor-sheet': () => openAnchorSheet(),
+  'anchor-pattern': (el) => {
+    const a = sheetCtx.anchor;
+    if (a.pattern === el.dataset.v) return;
+    a.pattern = el.dataset.v;
+    const t = todayISO();
+    // Propone la próxima fecha que calza con el día típico de cada turno
+    a.date = a.pattern === '4x3' ? nextWeekday(t, 1) : nextWeekday(t, 2);
+    renderAnchorSheet();
+  },
   'anchor-wd': (el) => {
     const a = sheetCtx.anchor;
     // Mueve la fecha al día elegido dentro de la misma semana (martes ↔ miércoles = ±1 día)
@@ -1132,28 +1220,33 @@ const actions = {
   'anchor-other': () => { const i = $('#anchorDate', sheet); if (i) { i.focus(); if (i.showPicker) try { i.showPicker(); } catch (e) { /* */ } } toast('Elige la fecha: el día de la semana se toma de ella'); },
   'anchor-scope': (el) => { sheetCtx.anchor.scope = el.dataset.v; renderAnchorSheet(); },
   'save-anchor': () => {
-    const { date, scope } = sheetCtx.anchor;
+    const { date, scope, pattern } = sheetCtx.anchor;
     if (!isISO(date)) return toast('Elige una fecha');
-    if (scope === 'all') db.settings.anchors = [date];
+    const nu = { date, pattern };
+    if (scope === 'all') db.settings.anchors = [nu];
     else {
       // Rige desde esa fecha: se conservan los cambios anteriores y se reemplazan los posteriores
       const all = db.settings.anchors;
-      let list = all.filter((x) => x < date);
+      let list = all.filter((x) => x.date < date);
       if (!list.length) {
-        // La fecha es anterior al primer ingreso registrado: se corre la base hacia atrás (misma secuencia)
-        const k = Math.ceil((dnum(all[0]) - dnum(date)) / 28);
-        list = [diso(dnum(all[0]) - 28 * k)];
+        // La fecha es anterior a la primera secuencia: se corre la base hacia atrás (misma secuencia)
+        const f = all[0], len = PATTERNS[f.pattern].len;
+        const k = Math.ceil((dnum(f.date) - dnum(date)) / len);
+        const back = diso(dnum(f.date) - len * k);
+        list = back < date ? [{ date: back, pattern: f.pattern }] : [];
       }
-      if (mod(dnum(date) - dnum(list[list.length - 1]), 28) !== 0) list.push(date);
-      db.settings.anchors = list;
+      const last = list[list.length - 1];
+      const same = last && last.pattern === pattern && mod(dnum(date) - dnum(last.date), PATTERNS[pattern].len) === 0;
+      if (!same) list.push(nu);
+      db.settings.anchors = sortAnchors(list);
     }
     save(); closeSheet(); render();
-    toast(`Listo: ingreso los ${WD[dow(date)]} desde ${fmtShort(date)}`);
+    toast(`Listo: ${seqText(nu)} desde ${fmtShort(date)}`);
   },
   'del-anchor': (el) => {
     const v = el.dataset.v;
     if (!confirm(`¿Quitar el cambio del ${fmtLong(v)}? Esas fechas vuelven a la secuencia anterior.`)) return;
-    db.settings.anchors = db.settings.anchors.filter((x) => x !== v);
+    db.settings.anchors = db.settings.anchors.filter((x) => x.date !== v);
     save(); render(); toast('Cambio quitado');
   },
   'edit-cat': (el) => openCat(el.dataset.id || null),
@@ -1195,7 +1288,7 @@ const actions = {
   'export-json': () => exportJSON(),
   'import-json': () => $('#importFile').click(),
   wipe: () => {
-    if (!confirm('¿Borrar todas las vacaciones, permisos, cursos, notas y cambios de turno? (La secuencia 7x7 se mantiene)')) return;
+    if (!confirm('¿Borrar todas las vacaciones, permisos, cursos, notas y cambios de turno? (Tu secuencia de turno se mantiene)')) return;
     db.events = []; db.overrides = {}; db.notes = {};
     save(); render(); toast('Datos borrados');
   },

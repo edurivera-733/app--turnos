@@ -1,8 +1,8 @@
-# 🌙☀️ Turnos 7x7
+# 🌙☀️ Turnos (7x7 y 4x3)
 
-Calendario de turnos 7x7 editable para iPhone. Ya viene cargado con la secuencia del **Calendario de Turnos 2026** y la sigue automáticamente en los años siguientes.
+Calendario de turnos editable para iPhone: **7x7** (día y noche) o **4x3** (4 días de trabajo y 3 de descanso). Ya viene cargado con la secuencia del **Calendario de Turnos 2026** y la sigue automáticamente en los años siguientes.
 
-## La secuencia (ciclo de 28 días)
+## Turno 7x7 (ciclo de 28 días)
 
 | Día | Qué pasa |
 |---|---|
@@ -16,9 +16,24 @@ Calendario de turnos 7x7 editable para iPhone. Ya viene cargado con la secuencia
 
 La referencia es el martes 6 de enero de 2026 (inicio de noche).
 
-### Cambiar el día de ingreso (martes, miércoles u otro)
+## Turno 4x3 (ciclo de 7 días)
 
-En **Ajustes → Cambiar día de ingreso** eliges *Martes*, *Miércoles* u *Otro día* y la fecha en que subes al turno de noche. Con esa sola fecha la app calcula todas las subidas, bajadas, días y noches (por ejemplo, con ingreso miércoles: noches de miércoles a martes, bajada el miércoles en la mañana, subida el miércoles y turno de día de jueves a miércoles).
+| Día | Qué pasa |
+|---|---|
+| **Lunes** | Subo a faena y trabajo ⬆️☀️ |
+| Martes y miércoles | Turno de día ☀️ |
+| **Jueves** | Último día; al terminar bajo ⬇️ |
+| Viernes → domingo | Descanso 🏠 |
+
+El día de inicio también se puede cambiar (por ejemplo, martes a viernes).
+
+## Feriados de Chile
+
+Los feriados aparecen **en rojo** (número en rojo, borde y barra roja) en el calendario del mes, la vista del año y los próximos días, con su nombre al tocar el día. Se pueden ocultar en *Ajustes*.
+
+### Cambiar el tipo de turno o el día de ingreso
+
+En **Ajustes → Cambiar turno o día de ingreso** eliges **7x7** o **4x3**; para 7x7, *Martes*, *Miércoles* u *Otro día* (para 4x3, *Lunes* u otro) y la fecha en que subes al turno de noche. Con esa sola fecha la app calcula todas las subidas, bajadas, días y noches (por ejemplo, con ingreso miércoles: noches de miércoles a martes, bajada el miércoles en la mañana, subida el miércoles y turno de día de jueves a miércoles).
 
 - **Desde esa fecha:** lo anterior queda como estaba (útil cuando la empresa cambia la secuencia a partir de cierta semana).
 - **Todo el calendario:** recalcula también los meses pasados (útil para otra persona o para corregir la fecha).

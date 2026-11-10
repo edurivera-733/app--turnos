@@ -510,3 +510,14 @@ table.data tr.cur td { font-weight: 700; }
 .field-row > .field { min-width: 0; }
 .field-row .input { min-width: 0; max-width: 100%; }
 .seg.grid3 { display: grid; grid-template-columns: repeat(3, 1fr); }
+
+/* Feriados de Chile */
+.cell .hb { position: absolute; top: 0; left: 0; right: 0; height: 4px; background: var(--red-ink); }
+.cell.hol .dn { color: var(--red-ink); font-weight: 800; }
+.cell.hol { box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--red-ink) 70%, transparent); }
+.cell.hol.is-today { box-shadow: inset 0 0 0 2px var(--accent); }
+.strip button.hol { box-shadow: inset 0 3px 0 var(--red-ink); }
+.strip button.hol .dn { color: var(--red-ink); }
+.mini .g .hol { color: var(--red-ink); font-weight: 800; box-shadow: inset 0 0 0 1.5px var(--red-ink); }
+.mini .g .hol.ev { box-shadow: inset 0 0 0 1.5px var(--red-ink), inset 0 -3px 0 var(--evc); }
+.cycle span { line-height: 1.15; text-align: center; height: auto; min-height: 26px; padding: 3px 0; }
